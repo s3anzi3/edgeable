@@ -1,0 +1,150 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Length helpers — server-side caps so a direct SDK write can't stuff
+    // arbitrarily long strings into free-text fields.
+    function strMax(v, n) {
+      return v is string && v.size() <= n;
+    }
+    function optStrMax(data, key, n) {
+      return !(key in data) || (data[key] is string && data[key].size() <= n);
+    }
+
+    // ── users ────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+
+      // Open self-signup: must claim own UID, role=user, status=inactive.
+      // Accounts stay inactive until the admin approves a payment, so the
+      // transaction/subscription request is the real verification gate.
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'user'
+        && request.resource.data.status == 'inactive'
+        && strMax(request.resource.data.displayName, 80)
+        && optStrMax(request.resource.data, 'email', 254)
+        && optStrMax(request.resource.data, 'authEmail', 254)
+        && optStrMax(request.resource.data, 'telegramUsername', 32)
+        && optStrMax(request.resource.data, 'phone', 20);
+
+      // Subscribers can self-update only the `unitSize` preference. Everything
+      // else (status, subscription dates, role, etc.) requires admin.
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && request.auth.uid == uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['unitSize']));
+      allow delete: if isAdmin();
+    }
+
+    // ── lookup collections (uniqueness + login lookup) ──────
+    // Public single-doc reads allow login lookup before auth.
+    // List/query is denied so nobody can dump all usernames/phones.
+    // Create is constrained to {uid, authEmail} for the caller's own uid so the
+    // docs can't be stuffed with extra data.
+    match /usernames/{username} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'authEmail'])
+        && optStrMax(request.resource.data, 'authEmail', 254);
+      allow update, delete: if isAdmin();
+    }
+
+    match /phones/{phone} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'authEmail'])
+        && optStrMax(request.resource.data, 'authEmail', 254);
+      allow update, delete: if isAdmin();
+    }
+
+    // ── config (payment info, etc.) ─────────────────────────
+    // Payment info needs to be readable by subscribers so they can see
+    // the Cashapp/Zelle recipients on the renewal request form.
+    match /config/paymentInfo {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    match /config/{doc} {
+      allow read, write: if isAdmin();
+    }
+
+    // ── transactions ─────────────────────────────────────────
+    match /transactions/{txnId} {
+      // Admin reads all + writes. Subscribers can read only their own.
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.subscriberUid == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // ── profile change requests ──────────────────────────────
+    match /profileChangeRequests/{reqId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.subscriberUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.subscriberUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && strMax(request.resource.data.proposedValue, 254)
+        && optStrMax(request.resource.data, 'field', 40)
+        && optStrMax(request.resource.data, 'currentValue', 254)
+        && optStrMax(request.resource.data, 'reason', 200)
+        && optStrMax(request.resource.data, 'notes', 1000)
+        && optStrMax(request.resource.data, 'subscriberDisplayName', 80);
+      allow update, delete: if isAdmin();
+    }
+
+    // ── transaction requests ─────────────────────────────────
+    match /transactionRequests/{reqId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.subscriberUid == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.subscriberUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && optStrMax(request.resource.data, 'notes', 1000)
+        && optStrMax(request.resource.data, 'paymentReference', 200)
+        && optStrMax(request.resource.data, 'paymentMethod', 20)
+        && optStrMax(request.resource.data, 'proofImageUrl', 2000)
+        && optStrMax(request.resource.data, 'proofImagePath', 500)
+        && optStrMax(request.resource.data, 'subscriberDisplayName', 80)
+        && optStrMax(request.resource.data, 'subscriberTelegramUsername', 32);
+      allow update, delete: if isAdmin();
+    }
+
+    // ── daily P&L entries ────────────────────────────────────
+    // Readable by anyone signed in — inactive users can see the full track
+    // record (a teaser); the app separates "your subscription performance"
+    // from all-time. Write only by admin.
+    match /dailyPnL/{day} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── account events (audit log) ───────────────────────────
+    match /accountEvents/{eventId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.subscriberUid == request.auth.uid);
+      // Subscribers can only log events on their own account, with performedBy=subscriber.
+      // Admin operations write via Admin SDK (script/function), bypassing rules.
+      allow create: if isSignedIn()
+        && request.resource.data.subscriberUid == request.auth.uid
+        && request.resource.data.performedBy == 'subscriber'
+        && optStrMax(request.resource.data, 'subscriberDisplayName', 80);
+      allow update, delete: if isAdmin();
+    }
+  }
+}
