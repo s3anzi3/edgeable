@@ -177,7 +177,81 @@ export default function Guide() {
             </p>
           </Section>
 
-          <Section title="5. Long-Term Mindset">
+          <Section title="5. The Chase System (Baseball)">
+            <p>
+              Baseball is different from other sports because teams play in <strong className="text-foreground">series</strong>.
+              In the NBA the Knicks might play the Bulls tonight and the Warriors tomorrow — a new opponent
+              almost every night. In MLB, when the Yankees play the Orioles they'll usually face them 2–4
+              games in a row. That back-to-back structure is what makes <strong className="text-foreground">“chasing”</strong>{' '}
+              a bet possible: we get multiple cracks at the same edge, against the same matchup, on consecutive days.
+            </p>
+
+            <div>
+              <div className="font-medium text-foreground">How a chase works</div>
+              <p className="mt-1">
+                Some of my plays are <strong className="text-foreground">chase plays</strong>. Instead of a
+                one-and-done bet, we ride the play through the games of the series until it hits — or until the
+                series runs out. Every chase is built to win <strong className="text-foreground">5 units net</strong>.
+                If it wins in game 1, we're done. If it loses, we size the next bet to recover what we lost{' '}
+                <em>and</em> still net our 5 units, then run it back in the next game of that series. Chases run on
+                a <strong className="text-foreground">three-game series</strong>, so it's at most three bets
+                (games 1, 2, and 3) — if it still hasn't hit after game 3, the chase is over and we take the loss.
+              </p>
+            </div>
+
+            <div>
+              <div className="font-medium text-foreground">Example — “Under 8.5” chase</div>
+              <ol className="ml-5 mt-1 list-decimal space-y-1 marker:text-muted-foreground">
+                <li>Game 1: bet 5u to win 5u on the Under 8.5. If it cashes → <strong className="text-foreground">+5u</strong>, chase over.</li>
+                <li>Game 2 (only if game 1 lost): bet 10u to win 10u — that recovers the 5u we lost and still nets 5u.</li>
+                <li>Game 3 (only if still losing): bet 20u to win 20u — recovers the 15u lost plus our 5u target.</li>
+              </ol>
+              <p className="mt-2">
+                If it never hits by the end of game 3, the chase is over and we take the loss — we don't carry a
+                chase into a different series. (Exact bet sizes shift a bit with the odds; the idea is each step
+                wins back the prior losses plus 5 units.)
+              </p>
+            </div>
+
+            <div>
+              <div className="font-medium text-foreground">The ML / +1.5 System</div>
+              <p className="mt-1">
+                One specific chase keys off a <strong className="text-foreground">team name</strong> instead of a
+                fixed bet type. When the play just reads a team — say <span className="font-mono text-xs">Yankees</span>{' '}
+                for their series vs. the Orioles — the bet each game depends on whether the Yankees are favored:
+              </p>
+              <Bullets items={[
+                'Favored that game → play their moneyline (ML).',
+                'Underdog that game → play their +1.5 run-line spread.',
+              ]} />
+              <p className="mt-2">
+                It's still one continuous chase to net 5 units; only the bet type flips game-to-game with their role.
+              </p>
+              <div className="mt-2 font-medium text-foreground">Walkthrough</div>
+              <ol className="ml-5 mt-1 list-decimal space-y-1 marker:text-muted-foreground">
+                <li>Game 1: Yankees are underdogs → play <span className="font-mono text-xs">+1.5</span> to win 5u. They lose by 3, so the +1.5 doesn't cover — chase continues.</li>
+                <li>Game 2: Yankees are now favorites → play their ML to win back the 5u we lost + 5u more (10u). They lose again.</li>
+                <li>Game 3: Yankees are favorites again → play their ML to win back everything lost + 5u more.</li>
+              </ol>
+            </div>
+
+            <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
+              <div className="mb-2 flex items-center gap-2 font-medium text-warning">
+                <AlertTriangle className="h-4 w-4" /> This is a system — not emotional chasing.
+              </div>
+              <p>
+                Don't confuse this with the loss-chasing I warn about in Section 3. A chase here is a{' '}
+                <strong className="text-foreground">pre-defined, bounded plan</strong>: the number of games is
+                capped by the series, the bets are set in advance, and the whole sequence targets a fixed 5 units.
+                Because the stake grows each game, a full chase can risk a real chunk of bankroll — e.g.{' '}
+                <span className="font-mono text-xs">5 + 10 + 20 = 35u</span> across a 3-game series to net 5u.
+                That's exactly why the unit and bankroll guidance above matters: size your unit so a full failed
+                chase is something you can absorb without flinching.
+              </p>
+            </div>
+          </Section>
+
+          <Section title="6. Long-Term Mindset">
             <p>At the end of the day: it's your money, your bankroll, your responsibility.</p>
             <p>
               You're always free to reach out with questions — I genuinely want your betting experience to go
@@ -186,7 +260,7 @@ export default function Guide() {
             </p>
           </Section>
 
-          <Section title="6. Final Notes">
+          <Section title="7. Final Notes">
             <p>If you choose to tail:</p>
             <Bullets items={[
               'Respect the units',

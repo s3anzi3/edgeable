@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Receipt, Inbox, LineChart, Plus } from 'lucide-react';
+import { Receipt, Inbox, LineChart, Plus, BookOpen } from 'lucide-react';
 import {
   collection, getDocs, query, where, orderBy, limit, Timestamp, getCountFromServer,
 } from 'firebase/firestore';
@@ -97,6 +97,9 @@ export default function Admin() {
 
   const navActions = (
     <>
+      <Button variant="outline" size="sm" asChild>
+        <Link to="/guide"><BookOpen className="h-4 w-4" /> Guide</Link>
+      </Button>
       <Button variant="outline" size="sm" asChild>
         <Link to="/admin/pnl"><LineChart className="h-4 w-4" /> Daily P&amp;L</Link>
       </Button>
