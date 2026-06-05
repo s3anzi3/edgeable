@@ -7,7 +7,7 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
-  doc, onSnapshot, runTransaction, Timestamp,
+  doc, getDoc, onSnapshot, runTransaction, Timestamp,
 } from 'firebase/firestore';
 import { auth, db } from './firebase.js';
 import {
@@ -92,18 +92,10 @@ export function AuthProvider({ children }) {
     // The real email IS the Firebase Auth account email — this is what makes the
     // free built-in password-reset emails work. Telegram/phone remain login aliases
     // that resolve to this email via the lookup docs below.
-    let cred;
-    try {
-      cred = await createUserWithEmailAndPassword(auth, authEmail, password);
-    } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
-        throw new Error('That email is already registered. Try signing in instead.');
-      }
-      throw err;
-    }
-    const uid = cred.user.uid;
 
-    try {
+    // Write the profile + login-lookup docs for a uid. Atomic: either the user
+    // doc and both lookup docs all land, or none of them do.
+    const writeProfileDocs = async (uid) => {
       await runTransaction(db, async (txn) => {
         const userRef = doc(db, 'users', uid);
         const usernameRef = hasUsername ? doc(db, 'usernames', username) : null;
@@ -112,11 +104,15 @@ export function AuthProvider({ children }) {
         // Reads first (transactions require all reads before writes).
         if (usernameRef) {
           const unameSnap = await txn.get(usernameRef);
-          if (unameSnap.exists()) throw new Error('That Telegram username is already taken.');
+          if (unameSnap.exists() && unameSnap.data().uid !== uid) {
+            throw new Error('That Telegram username is already taken.');
+          }
         }
         if (phoneRef) {
           const phoneSnap = await txn.get(phoneRef);
-          if (phoneSnap.exists()) throw new Error('That phone number is already registered.');
+          if (phoneSnap.exists() && phoneSnap.data().uid !== uid) {
+            throw new Error('That phone number is already registered.');
+          }
         }
 
         txn.set(userRef, {
@@ -132,12 +128,60 @@ export function AuthProvider({ children }) {
         if (usernameRef) txn.set(usernameRef, { uid, authEmail });
         if (phoneRef) txn.set(phoneRef, { uid, authEmail });
       });
+    };
+
+    // A taken username/phone is something the user must fix; everything else
+    // (permission-denied, network/"unavailable") is a transient infra issue
+    // they should simply retry. Keep them distinguishable for messaging.
+    const isUniquenessError = (err) =>
+      /already taken|already registered/i.test(err?.message || '');
+    const DB_RETRY_MESSAGE =
+      "We couldn't finish creating your account due to a temporary database error. " +
+      'Please wait a minute and try again.';
+
+    let cred;
+    try {
+      cred = await createUserWithEmailAndPassword(auth, authEmail, password);
     } catch (err) {
-      try { await cred.user.delete(); } catch {}
-      if (err.code === 'permission-denied') {
-        throw new Error('Could not create your account. Please try again or contact the admin.');
+      if (err.code === 'auth/email-already-in-use') {
+        // The email is taken by either a real account OR an orphan left behind
+        // when a previous signup's profile write failed AND its cleanup delete
+        // also failed. If the caller proves they own it (correct password) and
+        // there's no profile yet, finish the signup instead of leaving them
+        // permanently locked out.
+        let existing;
+        try {
+          existing = await signInWithEmailAndPassword(auth, authEmail, password);
+        } catch {
+          throw new Error('That email is already registered. Try signing in instead.');
+        }
+        const profileSnap = await getDoc(doc(db, 'users', existing.user.uid));
+        if (profileSnap.exists()) {
+          await signOut(auth);
+          throw new Error('That email is already registered. Try signing in instead.');
+        }
+        try {
+          await writeProfileDocs(existing.user.uid);
+        } catch (healErr) {
+          if (isUniquenessError(healErr)) throw healErr;
+          throw new Error(DB_RETRY_MESSAGE);
+        }
+        return; // orphan repaired; they're now signed in
       }
       throw err;
+    }
+
+    try {
+      await writeProfileDocs(cred.user.uid);
+    } catch (err) {
+      // The Auth account exists but its profile didn't land. Roll it back so a
+      // retry starts clean; retry the delete a few times. If the delete still
+      // fails, the next attempt self-heals via the email-already-in-use path.
+      for (let i = 0; i < 3; i++) {
+        try { await cred.user.delete(); break; } catch { /* keep trying */ }
+      }
+      if (isUniquenessError(err)) throw err;
+      throw new Error(DB_RETRY_MESSAGE);
     }
   };
 
