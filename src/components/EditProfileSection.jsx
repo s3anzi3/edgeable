@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { updateUserProfile } from '../utils/users.js';
-import { normalizeTelegramUsername, normalizePhone } from '../utils/auth.js';
+import { updateUserProfile, adminChangeEmail } from '../utils/users.js';
+import { normalizeEmail, isValidEmail } from '../utils/auth.js';
 import { Card, CardContent } from './ui/card.jsx';
 import { Button } from './ui/button.jsx';
 import { Input } from './ui/input.jsx';
@@ -20,12 +20,14 @@ function formatPhoneDisplay(digits) {
 export default function EditProfileSection({ subscriber, onUpdated }) {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(subscriber.displayName || '');
+  const [email, setEmail] = useState(subscriber.email || '');
   const [phone, setPhone] = useState(subscriber.phone || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const startEdit = () => {
     setDisplayName(subscriber.displayName || '');
+    setEmail(subscriber.email || '');
     setPhone(subscriber.phone || '');
     setError('');
     setEditing(true);
@@ -33,12 +35,23 @@ export default function EditProfileSection({ subscriber, onUpdated }) {
 
   const handleSave = async () => {
     setError('');
+
+    const newEmail = normalizeEmail(email);
+    const emailChanged = newEmail !== normalizeEmail(subscriber.email || '');
+    if (emailChanged && !isValidEmail(newEmail)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setSaving(true);
     try {
-      await updateUserProfile(subscriber.id, {
-        displayName,
-        phone,
-      });
+      // Email is the login + reset address — it goes through the admin Cloud
+      // Function (Auth account + lookup docs). Do it first so a failure (e.g.
+      // already in use) stops before we touch anything else.
+      if (emailChanged) {
+        await adminChangeEmail(subscriber.id, newEmail);
+      }
+      await updateUserProfile(subscriber.id, { displayName, phone });
       setEditing(false);
       if (onUpdated) await onUpdated();
     } catch (e) {
@@ -75,12 +88,16 @@ export default function EditProfileSection({ subscriber, onUpdated }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Email</Label>
-              <div className="rounded-md bg-muted px-3 py-2.5 text-sm text-muted-foreground">
-                {subscriber.email || '(unset)'}
-              </div>
+              <Label htmlFor="ep-email">Email</Label>
+              <Input
+                id="ep-email" type="email" value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="off" autoCorrect="off"
+                placeholder="you@example.com"
+              />
               <p className="text-xs text-muted-foreground">
-                Email changes require the admin reset script (it's the login + password-reset address).
+                This is their login + password-reset address. Changing it updates everything
+                (login by email/Telegram/phone all keep working).
               </p>
             </div>
 

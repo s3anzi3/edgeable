@@ -13,6 +13,15 @@ export async function deleteSubscriberAccount(uid) {
   await fn({ uid });
 }
 
+// Admin-only: change a subscriber's email. This is their login + password-reset
+// address, so it must go through the Cloud Function (Admin SDK updates the Auth
+// account and keeps the users doc + telegram/phone lookup docs in sync).
+export async function adminChangeEmail(uid, email) {
+  const fn = httpsCallable(functions, 'applyProfileChange');
+  const res = await fn({ uid, field: 'email', value: email });
+  return res.data;
+}
+
 // Admin override of a subscriber's subscription window.
 //  - startDate  ("YYYY-MM-DD" or '')  → subscriptionStart (drives the performance
 //    window the subscriber sees; safe to set to a pre-launch date for legacy clients).
