@@ -211,6 +211,12 @@ export default function Guide() {
                 chase into a different series. (Exact bet sizes shift a bit with the odds; the idea is each step
                 wins back the prior losses plus 5 units.)
               </p>
+              <p className="mt-2">
+                One note on the number itself. A chase is named for a number, like Under 8.5 for the Mariners, but
+                you always bet the line that's actually posted for that game. If the total for a later game in the
+                series is higher than 8.5, say it sits at 9 or 9.5, take that posted line. A higher number on an
+                Under only works in your favor, and that's the line that counts as the system play.
+              </p>
             </div>
 
             <div>
