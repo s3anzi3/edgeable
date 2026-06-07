@@ -26,7 +26,7 @@ async function assertAdmin(uid) {
   }
 }
 
-exports.applyProfileChange = onCall(async (request) => {
+exports.applyProfileChange = onCall({ enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth && request.auth.uid);
 
   const { uid, field, value } = request.data || {};
@@ -102,7 +102,7 @@ exports.applyProfileChange = onCall(async (request) => {
 // Admin-only: fully delete a subscriber account. Removes the Auth user, the
 // users doc, the username/phone login lookups, and their pending requests +
 // account events. Transactions are intentionally KEPT as financial records.
-exports.deleteSubscriber = onCall(async (request) => {
+exports.deleteSubscriber = onCall({ enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth && request.auth.uid);
 
   const { uid } = request.data || {};
