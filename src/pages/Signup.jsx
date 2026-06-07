@@ -54,13 +54,12 @@ export default function Signup() {
 
     if (!displayName.trim()) return fail('Please enter your display name.');
     if (!isValidEmail(email)) return fail('Please enter a valid email address.');
-    if (!hasUsername && !hasPhone) {
-      return fail('Enter your Telegram username or phone number (at least one).');
-    }
-    if (hasUsername && !isValidTelegramUsername(normalizedUsername)) {
+    if (!hasUsername) return fail('Please enter your Telegram username.');
+    if (!isValidTelegramUsername(normalizedUsername)) {
       return fail('Telegram username must be 5-32 characters: letters, numbers, or underscore.');
     }
-    if (hasPhone && !isValidPhone(normalizedPhone)) {
+    if (!hasPhone) return fail('Please enter your phone number.');
+    if (!isValidPhone(normalizedPhone)) {
       return fail('Phone must be 7-15 digits.');
     }
     if (password.length < 6) return fail('Password must be at least 6 characters.');
@@ -96,7 +95,7 @@ export default function Signup() {
           <div className="mb-6">
             <h1 className="font-display text-2xl font-semibold tracking-tight">Create your account</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Add your Telegram or phone so we can match you to your subscription.
+              Add your Telegram and phone so we can match you to your subscription.
             </p>
           </div>
 
@@ -127,13 +126,14 @@ export default function Signup() {
                 placeholder="you@example.com"
               />
               <p className="text-xs text-muted-foreground">
-                Used to sign in and to reset your password if you forget it.
+                You'll get a link to confirm this email. Used to sign in and to reset your
+                password if you forget it.
               </p>
             </div>
 
             <div className="rounded-md border border-border bg-muted/40 p-3">
               <p className="mb-3 text-xs text-muted-foreground">
-                Provide at least one — your Telegram username, your phone number, or both.
+                Both your Telegram username and phone number are required.
               </p>
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -142,6 +142,7 @@ export default function Signup() {
                     id="telegramUsername"
                     value={telegramUsername}
                     onChange={(e) => setTelegramUsername(e.target.value)}
+                    required
                     maxLength={33}
                     autoCapitalize="off"
                     autoCorrect="off"
@@ -156,6 +157,7 @@ export default function Signup() {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    required
                     placeholder="+1 555 123 4567"
                   />
                 </div>

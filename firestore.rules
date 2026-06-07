@@ -21,6 +21,10 @@ service cloud.firestore {
     function optStrMax(data, key, n) {
       return !(key in data) || (data[key] is string && data[key].size() <= n);
     }
+    // Required non-empty string within [min, max] length.
+    function reqStr(v, min, max) {
+      return v is string && v.size() >= min && v.size() <= max;
+    }
 
     // ── users ────────────────────────────────────────────────
     match /users/{uid} {
@@ -29,15 +33,16 @@ service cloud.firestore {
       // Open self-signup: must claim own UID, role=user, status=inactive.
       // Accounts stay inactive until the admin approves a payment, so the
       // transaction/subscription request is the real verification gate.
+      // Email, Telegram username, and phone are all required at signup.
       allow create: if isSignedIn()
         && request.auth.uid == uid
         && request.resource.data.role == 'user'
         && request.resource.data.status == 'inactive'
-        && strMax(request.resource.data.displayName, 80)
-        && optStrMax(request.resource.data, 'email', 254)
-        && optStrMax(request.resource.data, 'authEmail', 254)
-        && optStrMax(request.resource.data, 'telegramUsername', 32)
-        && optStrMax(request.resource.data, 'phone', 20);
+        && reqStr(request.resource.data.displayName, 1, 80)
+        && reqStr(request.resource.data.email, 3, 254)
+        && reqStr(request.resource.data.telegramUsername, 5, 32)
+        && reqStr(request.resource.data.phone, 7, 20)
+        && optStrMax(request.resource.data, 'authEmail', 254);
 
       // Subscribers can self-update only the `unitSize` preference. Everything
       // else (status, subscription dates, role, etc.) requires admin.

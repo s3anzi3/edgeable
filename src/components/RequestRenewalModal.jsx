@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { MailWarning } from 'lucide-react';
+import { useAuth } from '../AuthContext.jsx';
 import LengthPicker from './LengthPicker.jsx';
 import ImageUploader from './ImageUploader.jsx';
 import { createTransactionRequest } from '../utils/transactionRequests.js';
@@ -16,6 +18,10 @@ import { Textarea } from './ui/textarea.jsx';
 import { cn } from '../lib/utils.js';
 
 export default function RequestRenewalModal({ uid, userDoc, onClose, onSubmitted }) {
+  const { emailVerified, refreshEmailVerified, resendVerification } = useAuth();
+  const [verifyMsg, setVerifyMsg] = useState('');
+  const [verifyBusy, setVerifyBusy] = useState(false);
+
   const [length, setLength] = useState({ years: 0, months: 1, weeks: 0 });
   const [paymentMethod, setPaymentMethod] = useState('cashapp');
   const [declaredPrice, setDeclaredPrice] = useState('');
@@ -50,6 +56,29 @@ export default function RequestRenewalModal({ uid, userDoc, onClose, onSubmitted
     })();
     return () => { cancelled = true; };
   }, [uid]);
+
+  // Pick up a verification that may have happened in another tab.
+  useEffect(() => { refreshEmailVerified(); }, [refreshEmailVerified]);
+
+  const handleResendVerification = async () => {
+    setVerifyBusy(true);
+    setVerifyMsg('');
+    try {
+      await resendVerification();
+      setVerifyMsg('Verification email sent. Check your inbox (and spam folder).');
+    } catch (e) {
+      setVerifyMsg(e?.message || 'Could not send the email. Try again in a minute.');
+    }
+    setVerifyBusy(false);
+  };
+
+  const handleRecheckVerification = async () => {
+    setVerifyBusy(true);
+    setVerifyMsg('');
+    const ok = await refreshEmailVerified();
+    if (!ok) setVerifyMsg('Still not verified. Click the link in the email, then re-check.');
+    setVerifyBusy(false);
+  };
 
   const breakdown = computeSuggestedPrice(paidMonths, length);
   const suggestedPrice = breakdown.total;
@@ -110,6 +139,35 @@ export default function RequestRenewalModal({ uid, userDoc, onClose, onSubmitted
 
         {!loaded ? (
           <div className="py-4 text-sm text-muted-foreground">Loading…</div>
+        ) : !emailVerified ? (
+          <div className="space-y-4">
+            <div className="flex gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm">
+              <MailWarning className="h-5 w-5 shrink-0 text-warning" />
+              <div className="space-y-1">
+                <div className="font-medium text-foreground">Verify your email first</div>
+                <p className="text-muted-foreground">
+                  Before submitting a payment request, please confirm your email address. We sent a
+                  link to <strong className="text-foreground">{userDoc?.email || 'your email'}</strong>.
+                  Open it, then re-check below.
+                </p>
+              </div>
+            </div>
+
+            {verifyMsg && (
+              <div className="rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+                {verifyMsg}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={handleResendVerification} disabled={verifyBusy}>
+                Resend email
+              </Button>
+              <Button type="button" onClick={handleRecheckVerification} disabled={verifyBusy}>
+                {verifyBusy ? 'Checking…' : "I've verified — re-check"}
+              </Button>
+            </DialogFooter>
+          </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <Field label="Length to purchase">

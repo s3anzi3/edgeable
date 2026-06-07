@@ -5,6 +5,7 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
 } from 'firebase/auth';
 import {
   doc, getDoc, onSnapshot, runTransaction, Timestamp,
@@ -23,11 +24,13 @@ export function AuthProvider({ children }) {
   const [userDoc, setUserDoc] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [docReady, setDocReady] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   // Track the Firebase Auth user
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      setEmailVerified(!!user && user.emailVerified);
       setAuthReady(true);
       if (!user) {
         setUserDoc(null);
@@ -67,6 +70,22 @@ export function AuthProvider({ children }) {
 
   const resetPassword = (email) => sendPasswordResetEmail(auth, normalizeEmail(email));
 
+  // Re-send the verification email to the currently signed-in user.
+  const resendVerification = async () => {
+    if (!auth.currentUser) throw new Error('You must be signed in.');
+    await sendEmailVerification(auth.currentUser);
+  };
+
+  // Re-fetch the auth user and refresh the verified flag (the flip happens in
+  // whatever tab the user clicked the link, so we reload to pick it up here).
+  const refreshEmailVerified = async () => {
+    if (!auth.currentUser) return false;
+    await auth.currentUser.reload();
+    const v = auth.currentUser.emailVerified;
+    setEmailVerified(v);
+    return v;
+  };
+
   const signup = async ({ displayName, email, telegramUsername, phone, password }) => {
     const username = normalizeTelegramUsername(telegramUsername);
     const normalizedPhone = normalizePhone(phone);
@@ -76,13 +95,13 @@ export function AuthProvider({ children }) {
 
     if (!displayName || !displayName.trim()) throw new Error('Display name is required.');
     if (!isValidEmail(authEmail)) throw new Error('Please enter a valid email address.');
-    if (!hasUsername && !hasPhone) {
-      throw new Error('Enter your Telegram username or phone number.');
-    }
-    if (hasUsername && !isValidTelegramUsername(username)) {
+    // Email, Telegram username, and phone are all required.
+    if (!hasUsername) throw new Error('Telegram username is required.');
+    if (!isValidTelegramUsername(username)) {
       throw new Error('Telegram username must be 5-32 chars, letters/digits/underscore only.');
     }
-    if (hasPhone && !isValidPhone(normalizedPhone)) {
+    if (!hasPhone) throw new Error('Phone number is required.');
+    if (!isValidPhone(normalizedPhone)) {
       throw new Error('Phone must be 7-15 digits.');
     }
     if (!password || password.length < 6) {
@@ -166,6 +185,7 @@ export function AuthProvider({ children }) {
           if (isUniquenessError(healErr)) throw healErr;
           throw new Error(DB_RETRY_MESSAGE);
         }
+        try { await sendEmailVerification(existing.user); } catch { /* non-fatal */ }
         return; // orphan repaired; they're now signed in
       }
       throw err;
@@ -183,13 +203,17 @@ export function AuthProvider({ children }) {
       if (isUniquenessError(err)) throw err;
       throw new Error(DB_RETRY_MESSAGE);
     }
+
+    // Prove the email is real/owned. Non-fatal if it fails — the user can
+    // resend from the dashboard or the renewal form.
+    try { await sendEmailVerification(cred.user); } catch { /* non-fatal */ }
   };
 
   const role = userDoc?.role ?? null;
   const loading = !authReady || (currentUser && !docReady);
 
   return (
-    <AuthContext.Provider value={{ currentUser, userDoc, role, loading, login, logout, signup, resetPassword }}>
+    <AuthContext.Provider value={{ currentUser, userDoc, role, loading, emailVerified, login, logout, signup, resetPassword, resendVerification, refreshEmailVerified }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Send, BookOpen, ChevronRight } from 'lucide-react';
+import { Send, BookOpen, ChevronRight, MailWarning } from 'lucide-react';
 import { useAuth } from '../AuthContext.jsx';
 import AppShell, { PageHeader } from '../components/AppShell.jsx';
 import SubscriptionCard from '../components/SubscriptionCard.jsx';
@@ -15,14 +15,36 @@ import { Card } from '../components/ui/card.jsx';
 import { Button } from '../components/ui/button.jsx';
 
 export default function Dashboard() {
-  const { currentUser, userDoc } = useAuth();
+  const { currentUser, userDoc, emailVerified, resendVerification, refreshEmailVerified } = useAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showRenewalModal, setShowRenewalModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [requestsRefreshKey, setRequestsRefreshKey] = useState(0);
+  const [verifyMsg, setVerifyMsg] = useState('');
+  const [verifyBusy, setVerifyBusy] = useState(false);
 
   const handleSubmitted = () => {
     setRequestsRefreshKey((k) => k + 1);
+  };
+
+  const handleResendVerification = async () => {
+    setVerifyBusy(true);
+    setVerifyMsg('');
+    try {
+      await resendVerification();
+      setVerifyMsg('Sent. Check your inbox (and spam), open the link, then re-check.');
+    } catch (e) {
+      setVerifyMsg(e?.message || 'Could not send the email. Try again shortly.');
+    }
+    setVerifyBusy(false);
+  };
+
+  const handleRecheckVerification = async () => {
+    setVerifyBusy(true);
+    setVerifyMsg('');
+    const ok = await refreshEmailVerified();
+    if (!ok) setVerifyMsg('Still not verified. Click the link in the email, then re-check.');
+    setVerifyBusy(false);
   };
 
   return (
@@ -33,6 +55,31 @@ export default function Dashboard() {
       />
 
       <div className="flex flex-col gap-4">
+        {currentUser && !emailVerified && (
+          <Card className="border-warning/30 bg-warning/5 p-4">
+            <div className="flex flex-wrap items-start gap-3">
+              <MailWarning className="h-5 w-5 shrink-0 text-warning" />
+              <div className="min-w-0 flex-1">
+                <div className="font-display font-semibold tracking-tight">Confirm your email</div>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  We sent a verification link to{' '}
+                  <strong className="text-foreground">{userDoc?.email || currentUser.email}</strong>.
+                  You'll need a verified email to submit a payment request.
+                </p>
+                {verifyMsg && <p className="mt-2 text-sm text-muted-foreground">{verifyMsg}</p>}
+                <div className="mt-3 flex gap-2">
+                  <Button size="sm" variant="outline" onClick={handleResendVerification} disabled={verifyBusy}>
+                    Resend email
+                  </Button>
+                  <Button size="sm" onClick={handleRecheckVerification} disabled={verifyBusy}>
+                    {verifyBusy ? 'Checking…' : "I've verified"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <SubscriptionCard userDoc={userDoc} />
 
         <Link
